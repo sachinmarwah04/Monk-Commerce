@@ -23,6 +23,7 @@ const productSlice = createSlice({
         state.selectedProducts.push(newProduct);
       }
     },
+
     addEmptyProduct: (state) => {
       state.selectedProducts.push({
         id: Date.now(),
@@ -30,6 +31,7 @@ const productSlice = createSlice({
         variants: [],
       });
     },
+
     reorderProducts: (state, action) => {
       const { sourceIndex, destinationIndex } = action.payload;
       const movedProduct = state.selectedProducts.splice(sourceIndex, 1)[0];

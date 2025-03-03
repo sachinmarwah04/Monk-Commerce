@@ -1,19 +1,28 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import Modal from "..";
 import searchIcon from "../../../assets/Icons/search.svg";
 import Checkbox from "../../CoreComponents/Checkbox/Checkbox";
+import axios from "axios";
+import Spinner from "../../CoreComponents/Spinner";
 
 const ProductListModal = ({
   isOpen,
   onClose,
-  products,
   onSelect,
   preSelectedProducts = [],
   replacingProductId,
 }) => {
   const [selectedProducts, setSelectedProducts] = useState([]);
   const [selectedVariants, setSelectedVariants] = useState([]);
-  const [searchTerm, setSearchTerm] = useState("");
+  const [products, setProducts] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [page, setPage] = useState(0);
+  const [hasMore, setHasMore] = useState(true);
+  const [localSelectedProducts, setLocalSelectedProducts] = useState([]);
+  const observer = useRef();
+  const loadingRef = useRef(false);
+  const hasMoreRef = useRef(true);
 
   useEffect(() => {
     if (isOpen) {
@@ -22,26 +31,91 @@ const ProductListModal = ({
     }
   }, [isOpen, preSelectedProducts]);
 
+  const fetchProducts = useCallback(async (query = "", currentPage = 0) => {
+    if (!hasMoreRef.current || loadingRef.current) return;
+
+    loadingRef.current = true;
+    setLoading(true);
+
+    try {
+      const response = await axios.get(
+        "https://stageapi.monkcommerce.app/task/products/search",
+        {
+          params: { search: query, page: currentPage, limit: 10 },
+          headers: { "x-api-key": "72njgfa948d9aS7gs5" },
+        }
+      );
+
+      const newProducts = response.data || [];
+
+      setProducts((prev) => {
+        const uniqueProducts = [
+          ...prev,
+          ...newProducts.filter(
+            (p) => !prev.some((prevP) => prevP.id === p.id)
+          ),
+        ];
+        return currentPage === 0 ? newProducts : uniqueProducts;
+      });
+
+      hasMoreRef.current = newProducts.length > 0;
+      setHasMore(newProducts.length > 0);
+      setPage(currentPage + 1);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      loadingRef.current = false;
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (isOpen) {
+      setProducts([]);
+      setPage(0);
+      setHasMore(true);
+      fetchProducts(searchQuery, 0);
+    }
+  }, [isOpen, searchQuery, fetchProducts]);
+
+  const lastProductRef = useCallback(
+    (node) => {
+      if (loading || !hasMore) return;
+
+      if (observer.current) observer.current.disconnect();
+      observer.current = new IntersectionObserver((entries) => {
+        if (entries[0].isIntersecting) {
+          fetchProducts(searchQuery, page);
+        }
+      });
+
+      if (node) observer.current.observe(node);
+    },
+    [loading, hasMore, fetchProducts, searchQuery, page]
+  );
+
+  const handleSearchChange = (e) => {
+    setSearchQuery(e.target.value);
+    setPage(0);
+    setHasMore(true);
+  };
+
   const toggleProductSelection = (product, event) => {
     event.stopPropagation();
 
     setSelectedProducts((prevSelectedProducts) => {
-      let updatedProducts = [...prevSelectedProducts];
-      let updatedVariants = [...selectedVariants];
+      const updatedProducts = prevSelectedProducts.filter(
+        (p) => p.id !== replacingProductId
+      );
 
-      if (replacingProductId && replacingProductId !== product.id) {
-        updatedProducts = updatedProducts.filter(
-          (p) => p.id !== replacingProductId
-        );
-        updatedVariants = updatedVariants.filter(
-          (v) =>
-            !prevSelectedProducts
-              .find((p) => p.id === replacingProductId)
-              ?.variants.some((pv) => pv.id === v.id)
-        );
-      }
+      let updatedVariants = selectedVariants.filter(
+        (v) =>
+          !prevSelectedProducts
+            .find((p) => p.id === replacingProductId)
+            ?.variants.some((pv) => pv.id === v.id)
+      );
 
-      const isProductSelected = updatedProducts.some(
+      const isProductSelected = prevSelectedProducts.some(
         (p) => p.id === product.id
       );
 
@@ -49,15 +123,20 @@ const ProductListModal = ({
         updatedVariants = updatedVariants.filter(
           (v) => !product.variants.some((pv) => pv.id === v.id)
         );
-        updatedProducts = updatedProducts.filter((p) => p.id !== product.id);
+        setSelectedVariants(updatedVariants);
+        return updatedProducts.filter((p) => p.id !== product.id);
       } else {
         updatedVariants = [...updatedVariants, ...product.variants];
-        updatedProducts = [...updatedProducts, product];
+        setSelectedVariants(updatedVariants);
+        return [...updatedProducts, product];
       }
-
-      setSelectedVariants(updatedVariants);
-      return updatedProducts;
     });
+
+    setLocalSelectedProducts((prevLocalSelected) =>
+      prevLocalSelected.some((p) => p.id === product.id)
+        ? prevLocalSelected.filter((p) => p.id !== product.id)
+        : [...prevLocalSelected, product]
+    );
   };
 
   const toggleVariantSelection = (product, variant, event) => {
@@ -106,17 +185,8 @@ const ProductListModal = ({
         index === self.findIndex((p) => p.id === product.id)
     );
 
-    console.log(uniqueProducts, "Final Selected Products");
     onSelect(uniqueProducts, selectedVariants);
   };
-
-  const filteredProducts = products.filter(
-    (product) =>
-      product.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      product.variants.some((variant) =>
-        variant.title.toLowerCase().includes(searchTerm.toLowerCase())
-      )
-  );
 
   return (
     <Modal isOpen={isOpen} onClose={onClose}>
@@ -138,63 +208,76 @@ const ProductListModal = ({
         <input
           className="border-none outline-none w-full"
           placeholder="Search Product"
-          value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
+          value={searchQuery}
+          onChange={handleSearchChange}
         />
       </div>
 
-      {filteredProducts?.map((product) => (
-        <div key={product?.id}>
-          <div className="flex items-center gap-4 p-3.5 px-5 border-t border-b border-black-100/10">
-            <Checkbox
-              checked={selectedProducts.some((p) => p.id === product.id)}
-              onChange={(e) => toggleProductSelection(product, e)}
-            />
-            <img
-              className="w-9 h-9 rounded"
-              src={product.image.src}
-              alt={product.title}
-            />
-            <p className="text-black-100/90 text-base font-normal">
-              {product.title}
-            </p>
-          </div>
+      <div className="h-[24rem] overflow-auto">
+        {" "}
+        {products?.map((product, index) => (
+          <div
+            ref={index === products.length - 1 ? lastProductRef : null}
+            key={product?.id}
+          >
+            <div className="flex items-center gap-4 p-3.5 px-5 border-t border-b border-black-100/10">
+              <Checkbox
+                checked={selectedProducts.some((p) => p.id === product.id)}
+                onChange={(e) => toggleProductSelection(product, e)}
+              />
+              <img
+                className="w-9 h-9 rounded"
+                src={product.image.src}
+                alt={product.title}
+              />
+              <p className="text-black-100/90 text-base font-normal">
+                {product.title}
+              </p>
+            </div>
 
-          {product.variants.map((variant) => (
-            <div
-              key={variant.id}
-              className="items-center p-3.5 px-5 pl-16 border-b border-black-100/10"
-            >
-              <div className="flex items-center justify-between w-full">
-                <div className="flex items-center gap-6">
-                  <Checkbox
-                    checked={selectedVariants.some((v) => v.id === variant.id)}
-                    onChange={(e) =>
-                      toggleVariantSelection(product, variant, e)
-                    }
-                  />
-                  <p className="text-black-100/90 text-base font-normal">
-                    {variant.title}
-                  </p>
-                </div>
+            {product.variants.map((variant) => (
+              <div
+                key={`${product.id}-${variant.id}`}
+                className="items-center p-3.5 px-5 pl-16 border-b border-black-100/10"
+              >
+                <div className="flex items-center justify-between w-full">
+                  <div className="flex items-center gap-6">
+                    <Checkbox
+                      checked={selectedVariants.some(
+                        (v) => v.id === variant.id
+                      )}
+                      onChange={(e) =>
+                        toggleVariantSelection(product, variant, e)
+                      }
+                    />
+                    <p className="text-black-100/90 text-base font-normal">
+                      {variant.title}
+                    </p>
+                  </div>
 
-                <div className="flex items-center gap-6">
-                  <p className="text-black-100/90 text-base font-normal">
-                    {variant.available} available
-                  </p>
-                  <p className="text-black-100/90 text-base font-normal">
-                    ${variant.price}
-                  </p>
+                  <div className="flex items-center gap-6">
+                    <p className="text-black-100/90 text-base font-normal">
+                      {variant.available} available
+                    </p>
+                    <p className="text-black-100/90 text-base font-normal">
+                      ${variant.price}
+                    </p>
+                  </div>
                 </div>
               </div>
-            </div>
-          ))}
-        </div>
-      ))}
+            ))}
+          </div>
+        ))}
+        {loading && (
+          <div className="h-full flex items-center justify-center">
+            <Spinner />
+          </div>
+        )}
+      </div>
 
       <div className="flex items-center justify-between p-4 py-4">
         <p className="text-black-100/90 font-normal text-base">
-          {selectedProducts.length} product(s) selected
+          {localSelectedProducts.length} product(s) selected
         </p>
         <div className="flex items-center gap-2.5">
           <button

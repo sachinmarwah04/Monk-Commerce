@@ -1,5 +1,5 @@
 import { useDispatch, useSelector } from "react-redux";
-import { useCallback, useState } from "react"; // Import useState
+import { useCallback, useState } from "react";
 import { DragDropContext } from "@hello-pangea/dnd";
 import {
   openModal,
@@ -13,7 +13,6 @@ import {
 } from "./redux/slice/productSlice";
 import { PRODUCT_LIST_MODAL } from "./constant";
 import ProductListModal from "./components/Modal/ProductListModal/ProductListModal";
-import { products } from "./helper";
 import ProductList from "./components/ProductList/ProductList";
 
 function App() {
@@ -84,7 +83,6 @@ function App() {
       <ProductListModal
         isOpen={isOpenProductListModal}
         onClose={handleCloseProductListModal}
-        products={products}
         onSelect={handleSelectProducts}
         preSelectedProducts={selectedProducts}
         replacingProductId={replacingProductId}
