@@ -59,22 +59,21 @@ const ProductList = ({ onOpenModal }) => {
                               {...provided.dragHandleProps}
                             />
 
-                            <button
-                              className="border border-black-100/7 flex items-center shadow-shadow justify-between bg-white-50 px-2 py-1.5 w-52 cursor-pointer text-sm text-black-100/50 font-normal"
-                              onClick={() => onOpenModal(product?.id || null)}
-                            >
+                            <div className="relative border border-black-100/7  flex items-center shadow-shadow justify-between bg-white-50 py-2 px-2 w-52 cursor-pointer text-sm text-black-100/50 font-normal">
+                              {" "}
+                              <button
+                                className="absolute right-0.5 top-0.5 hover:bg-gray-200 p-2"
+                                onClick={() => onOpenModal(product?.id || null)}
+                              >
+                                <img src={editIcon} alt="edit" />
+                              </button>
                               {truncateText(product?.title, 20) ||
                                 "Select Product"}
-                              <img
-                                className="w-4 h-4"
-                                src={editIcon}
-                                alt="edit"
-                              />
-                            </button>
+                            </div>
 
                             {!isDiscountVisible ? (
                               <button
-                                className="text-sm font-semibold text-white-50 bg-green-50 rounded px-5 py-1.5"
+                                className="text-sm font-semibold text-white-50 bg-green-50 rounded px-5 py-2"
                                 onClick={() => setIsDiscountVisible(true)}
                               >
                                 Add Discount
