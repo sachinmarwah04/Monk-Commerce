@@ -1,6 +1,5 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import downArrow from "../../../assets/Icons/arrow.svg";
-import useClickOutside from "../../hooks/useClickOutside";
 
 const Dropdown = ({
   options,
@@ -9,13 +8,22 @@ const Dropdown = ({
   placeholder,
   custom,
 }) => {
+  const dropdownRef = useRef();
   const [showOptions, setShowOptions] = useState(false);
 
-  const handleCloseDropdown = () => {
-    setShowOptions(false);
-  };
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
+        setShowOptions(false);
+      }
+    };
 
-  const dropdownRef = useClickOutside(handleCloseDropdown);
+    document.addEventListener("mousedown", handleClickOutside);
+
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, []);
 
   const handleOptionClick = (option) => {
     onSelect(option);
